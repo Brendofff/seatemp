@@ -1,6 +1,7 @@
 from flask import Flask, jsonify
 import requests
 from bs4 import BeautifulSoup
+import re
 import os
 
 app = Flask(__name__)
@@ -9,22 +10,24 @@ app = Flask(__name__)
 def sea_temp():
     url = "https://seatemperature.info/crikvenica-water-temperature.html"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0"
     }
+
     try:
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
 
         soup = BeautifulSoup(response.text, "html.parser")
-        temp_element = soup.find("span", class_="sea-temps-value")
 
-        if not temp_element:
-            return jsonify({"error": "Temperature element not found."}), 500
+        # Keresd meg a szöveget, ami tartalmazza a "sea temperature" részt
+        for p in soup.find_all("p"):
+            if "sea temperature in Crikvenica today is" in p.text:
+                match = re.search(r"([0-9]{1,2}(?:[.,][0-9])?)°C", p.text)
+                if match:
+                    temp_text = match.group(1).replace(",", ".")
+                    return jsonify({"temperature": float(temp_text)})
 
-        temp_text = temp_element.text.strip().replace("°C", "").replace(",", ".")
-        temperature = float(temp_text)
-
-        return jsonify({"temperature": temperature})
+        return jsonify({"error": "Temperature text not found."}), 500
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
